@@ -4,8 +4,6 @@ import argparse
 from dotenv import load_dotenv
 from terminaltables import AsciiTable
 
-
-
 def get_hh_vacancies(text="программист", area=1, per_page=100):
     vacancies = []
     total_vacancies = 0
@@ -17,16 +15,16 @@ def get_hh_vacancies(text="программист", area=1, per_page=100):
             params = {"text": text, "area": area, "per_page": per_page, "page": page}
             response = requests.get(hh_url, params=params)
             response.raise_for_status()
-            hh_response_json = response.json()
+            hh_response = response.json()
 
-            hh_vacancies_list = hh_response_json.get("items", [])
-            total_vacancies = hh_response_json.get("found", 0)
-            total_pages = hh_response_json.get("pages", 1)
+            hh_vacancies = hh_response.get("items", [])
+            total_vacancies = hh_response.get("found", 0)
+            total_pages = hh_response.get("pages", 1)
 
-            if not hh_vacancies_list:
+            if not hh_vacancies:
                 break
 
-            vacancies.extend(hh_vacancies_list)
+            vacancies.extend(hh_vacancies)
             page += 1
         except requests.RequestException as req_err:
             print(f"Ошибка запроса к HeadHunter: {req_err}")
@@ -44,15 +42,15 @@ def get_sj_vacancies(city="Москва", keyword="программист", coun
             params = {"keyword": keyword, "town": city, "count": count, "page": page}
             response = requests.get(sj_url, headers=sj_headers, params=params)
             response.raise_for_status()
-            sj_response_json = response.json()
+            sj_response = response.json()
 
-            sj_vacancies_list = sj_response_json.get("objects", [])
-            total_vacancies = sj_response_json.get("total", 0)
+            sj_vacancies = sj_response.get("objects", [])
+            total_vacancies = sj_response.get("total", 0)
 
-            if not sj_vacancies_list:
+            if not sj_vacancies:
                 break
 
-            vacancies.extend(sj_vacancies_list)
+            vacancies.extend(sj_vacancies)
             page += 1
         except requests.RequestException as req_err:
             print(f"Ошибка запроса к SuperJob: {req_err}")
@@ -71,15 +69,14 @@ def predict_salary(salary_from, salary_to):
 def predict_rub_salary_hh(vacancy):
     salary_details = vacancy.get("salary")
     if not salary_details or salary_details.get("currency") != 'RUR':
-        return None
+        return
     return predict_salary(salary_details.get("from"), salary_details.get("to"))
 
 def predict_rub_salary_sj(vacancy):
     payment_from = vacancy.get("payment_from")
     payment_to = vacancy.get("payment_to")
-    currency = vacancy.get("currency")
-    if currency != "rub":
-        return None
+    if vacancy.get("currency") != "rub":
+        return
     return predict_salary(payment_from, payment_to)
 
 def calculate_average_salary_for_languages(languages, vacancy_source, predict_func):
@@ -95,24 +92,14 @@ def calculate_average_salary_for_languages(languages, vacancy_source, predict_fu
 
         for vacancy in vacancies:
             salary = predict_func(vacancy)
-            if salary is None:
-                continue
-            total_salary += salary
-            vacancies_processed += 1
+            if salary:
+                total_salary += salary
+                vacancies_processed += 1
 
-        if vacancies_processed == 0:
-            average_salaries[lang] = {
-                "vacancies_found": total_vacancies,
-                "vacancies_processed": 0,
-                "average_salary": 0,
-            }
-            continue
-
-        average_salary = int(total_salary / vacancies_processed)
         average_salaries[lang] = {
             "vacancies_found": total_vacancies,
             "vacancies_processed": vacancies_processed,
-            "average_salary": average_salary,
+            "average_salary": int(total_salary / vacancies_processed) if vacancies_processed else 0,
         }
     return average_salaries
 
